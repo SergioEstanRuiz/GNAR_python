@@ -2,7 +2,7 @@ import numpy as np
 import networkx as nx
 from gnar.neighbours import get_neighbours
 
-class GNARSimulator:
+class GNARSim:
     """
         Simulator for the Generalized Network Autoregressive (GNAR) model.
         -----------------------------------
@@ -25,11 +25,13 @@ class GNARSimulator:
         net : np.ndarray
             Adjacency matrix (K x K).
         alpha : np.ndarray
-            Matrix of autoregressive coefficients (K x P).
-            E.g., alpha[0][1] = alpha for node=1, lag = 2 if alpha is local
-            or alpha[0] = alpha for lag = 1 if alpha is global.
+            Matrix of autoregressive coefficients (K x P) if alpha is local
+            E.g., alpha[0][1] = alpha for node=1, lag = 2 
+            OR
+            Matrix of autoregressive coefficients (P) if alpha is global
+            E.g., alpha[0] = alpha for lag = 1 if alpha is global.
         beta : list[np.ndarray]
-            List determines the lag, then we have a (N x s_j) matrix for each lag j if beta is local,
+            List determines the lag, then we have a (K x s_j) matrix for each lag j if beta is local,
             E.g., beta[2][0][1] = beta for lag=3, node=1, neighbour=2, 
             or beta[2][0] = beta for lag=3, neighbour=2 if beta is global.
 
@@ -38,13 +40,21 @@ class GNARSimulator:
         """
         self.net = net
         self.alpha = alpha
+        if alpha.ndim == 1:
+            self.lag = len(alpha)
+        else:
+            self.lag = alpha.shape[1]
+        if beta[0].ndim == 1:
+            self.maxStage = max(len(b) for b in beta)
+        else:
+            self.maxStage = max(len(b[0]) for b in beta)
         self.beta = beta
         self.sigma = sigma
         self.globalAlpha = True if alpha.ndim ==1 else False
         self.globalBeta = True if beta[0].ndim == 1 else False
         self.K = net.shape[0]  # Number of nodes
 
-    def generate_gnar(self,T, burnin=50, seed=None):
+    def generate_gnar(self,T, X_start = None, burnin=50, seed=None):
         """
         Generate synthetic data from a GNAR model using disjoint neighbor sets.
 
@@ -56,6 +66,8 @@ class GNARSimulator:
             Initial time points to discard.
         seed : int or None
             Random seed.
+        X_start : np.ndarray
+            Initial values for the time series (K x lag).
 
         Returns:
         --------
@@ -66,18 +78,20 @@ class GNARSimulator:
             np.random.seed(seed)
 
         G = nx.from_numpy_array(self.net)
-        lag = len(self.alpha[0])
-        max_stage = max(len(b[0]) for b in self.beta)
         total_T = T + burnin
 
         # Get neighbour sets
-        neighbor_sets = get_neighbours(self.net, max_stage)
+        neighbor_sets = get_neighbours(self.net, self.maxStage)
         # Initialize time series
         X = np.zeros((self.K, total_T))
 
-        for t in range(lag, total_T):
+        if X_start is not None:
+            ncols = min(self.lag, X_start.shape[1])
+            X[:, :ncols] = X_start[:, -ncols:]            
+
+        for t in range(self.lag, total_T):
             X_t = np.zeros(self.K)  # Adjusted to self.K (number of nodes)
-            for p in range(1, lag + 1):
+            for p in range(1, self.lag + 1): # Goes from 1 to self.lag
                 # Handle global/local alpha
                 if self.globalAlpha:
                     X_t += self.alpha[p - 1] * X[:, t - p]

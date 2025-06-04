@@ -11,14 +11,14 @@ def Ymatrix(data, p):
     """
     return data[:,p:]
 
-def yvector(data):
+def yvector(data, p):
     """
     Returns:
     -----------
     y : np.ndarray
         Flatten version of Y matrix
     """
-    return Ymatrix(data).flatten()
+    return Ymatrix(data, p).flatten()
 
 def Zmatrix(data: np.ndarray, p: int) -> np.ndarray:
     """
@@ -37,8 +37,7 @@ def Zmatrix(data: np.ndarray, p: int) -> np.ndarray:
     """
 
     K, T = data.shape
-    T_prime = T - p
-    Z = np.zeros((K * p, T_prime))
+    Z = np.zeros((K * p,  T - p))
 
     for lag in range(1, p + 1):
         rows = slice((lag - 1) * K, lag * K)
@@ -144,7 +143,7 @@ def Rmatrix(adj_matrix, p, s_tuple, global_alpha=True, global_beta=True):
     return R, index_map, gamma_index_map
 
 
-
+"""
 data = np.array([[1,5,2,5,6],[6,8,3,1,3],[7,7,3,6,4],[5,3,1,5,7]])
 print(data)
 print(Zmatrix(data,1))
@@ -160,4 +159,4 @@ print(R)
 print(R.todense())
 print(vecB_map)
 print(gamma_map)
-
+"""

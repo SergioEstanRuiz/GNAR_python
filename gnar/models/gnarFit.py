@@ -2,7 +2,8 @@ import numpy as np
 import networkx as nx
 from gnar.neighbours import get_neighbours
 from gnar import matrices
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import lsqr
+from gnar.models.gnarSim import GNARSim
 
 class GNARFit:
     """
@@ -13,8 +14,9 @@ class GNARFit:
             from gnar.models.gnarFit import GNARFit
         2. Create an instance of the class:
             gnar_fit = GNARFit(net, alphaOrder, betaOrder, data, globalAlpha=False, globalBeta=False)
-        3. Fit the model:
-            alpha, beta = gnar_fit.fit()
+            Notice that this already fits the model and saves the parameters in self.alpha and self.beta.
+        3. Make predictions using the predict method:
+            predictions = gnar_fit.predict(h)
         
             
     """
@@ -32,35 +34,60 @@ class GNARFit:
 
     def fit(self):
         if self.globalAlpha:
-            alpha = np.zeros((self.K, self.alphaOrder))
-        else:
             alpha = np.zeros(self.alphaOrder)
-        if self.globalBeta:
-            beta = np.zeros((self.K, self.K, self.betaOrder))
         else:
-            beta = np.zeros((self.K, self.betaOrder))
+            alpha = np.zeros((self.K, self.alphaOrder))
+        if self.globalBeta:
+            beta = [np.zeros(self.betaOrder[i]) for i in range(self.alphaOrder)]
+        else:
+            beta = [np.zeros((self.K, self.betaOrder[i])) for i in range(self.alphaOrder)]
         
         Z = matrices.Zmatrix(self.data, self.alphaOrder)
         R, index_map, gamma_index_map = matrices.Rmatrix(self.net, self.alphaOrder, self.betaOrder, global_alpha=self.globalAlpha, global_beta=self.globalBeta )
-        y = matrices.yvector(self.data)
+        y = matrices.yvector(self.data, p=self.alphaOrder)
         A = np.kron(Z.T, np.eye(self.K)) @ R
-        gamma = spsolve(A,y)
+        gamma = lsqr(A,y)[0]
 
-        # Fill in alpha and beta
-        for i in range(self.K):
-            for j in range(self.K):
-                for k in range(self.betaOrder):
-                    if self.globalBeta:
-                        beta[i,j,k] = gamma[gamma_index_map[(i,j,k)]]
-                    else:
-                        beta[i,k] = gamma[gamma_index_map[(i,k)]]
+        # Fill alpha
+        if self.globalAlpha:
             for k in range(self.alphaOrder):
-                if self.globalAlpha:
-                    alpha[i,k] = gamma[index_map[(i,k)]]
-                else:
-                    alpha[k] = gamma[index_map[k]]
+                alpha[k] = gamma[gamma_index_map[('alpha', k+1)]]
+        else:
+            for i in range(self.K):
+                for k in range(self.alphaOrder):
+                    alpha[i, k] = gamma[gamma_index_map[('alpha', i, k+1)]]
+
+        # Fill beta
+        if self.globalBeta:
+            for k in range(self.alphaOrder):
+                for dist in range(1, self.betaOrder[k]+1):
+                    beta[k][dist-1] = gamma[gamma_index_map[('beta', k+1, dist)]]
+        else:
+            for k in range(self.alphaOrder):
+                for i in range(self.K):
+                    for dist in range(1, self.betaOrder[k]+1):
+                        beta[k][i, dist-1] = gamma[gamma_index_map[('beta', i, k+1, dist)]]
         
         return alpha, beta
     
+    def predict(self, h):
+        """
+        Predict future values using the fitted GNAR model.
+
+        Parameters:
+        -----------
+        h : int
+            Number of steps ahead to predict.
+
+        Returns:
+        --------
+        predictions : np.ndarray
+            Predicted values (K x h).
+        """
+        
+        predictor = GNARSim(self.net, self.alpha, self.beta, sigma =0)
+        predictions = predictor.generate_gnar(T=h+self.alphaOrder, X_start=self.data[:,-self.alphaOrder:], burnin=0)
+        predictions = predictions[:, -h:]
+        return predictions
     
     
