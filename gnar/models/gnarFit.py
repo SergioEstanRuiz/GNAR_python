@@ -26,29 +26,29 @@ class GNARFit:
         self.data = data
         self.globalAlpha = globalAlpha
         self.globalBeta = globalBeta
-        self.N = net.shape[0]
+        self.K = net.shape[0]
         self.T = data.shape[0]
         self.alpha, self.beta = self.fit()
 
     def fit(self):
         if self.globalAlpha:
-            alpha = np.zeros((self.N, self.alphaOrder))
+            alpha = np.zeros((self.K, self.alphaOrder))
         else:
             alpha = np.zeros(self.alphaOrder)
         if self.globalBeta:
-            beta = np.zeros((self.N, self.N, self.betaOrder))
+            beta = np.zeros((self.K, self.K, self.betaOrder))
         else:
-            beta = np.zeros((self.N, self.betaOrder))
+            beta = np.zeros((self.K, self.betaOrder))
         
         Z = matrices.Zmatrix(self.data, self.alphaOrder)
         R, index_map, gamma_index_map = matrices.Rmatrix(self.net, self.alphaOrder, self.betaOrder, global_alpha=self.globalAlpha, global_beta=self.globalBeta )
         y = matrices.yvector(self.data)
-        A = np.kron(Z.T, np.ones((self.N,self.N))) @ R
+        A = np.kron(Z.T, np.eye(self.K)) @ R
         gamma = spsolve(A,y)
 
         # Fill in alpha and beta
-        for i in range(self.N):
-            for j in range(self.N):
+        for i in range(self.K):
+            for j in range(self.K):
                 for k in range(self.betaOrder):
                     if self.globalBeta:
                         beta[i,j,k] = gamma[gamma_index_map[(i,j,k)]]

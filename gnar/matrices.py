@@ -71,22 +71,24 @@ def Rmatrix(adj_matrix, p, s_tuple, global_alpha=True, global_beta=True):
         Mapping from (i, j, k) to row in vec(B)
     gamma_index_map : dict
         Mapping from (i, k) or (i, k, r) to column index in γ
+        E.g., gamma_index_map[(i, k)] = column index for α_i,k
+        gamma_index_map[(i, k, r)] = column index for β_i,k,r
     """
     K = adj_matrix.shape[0]
-    total_rows = K * K * p
+    total_rows = K * K * p # total number of rows in R = number of parameters (ie. A_1, ..., A_p)
     G = nx.from_numpy_array(adj_matrix)
     
     row_idx = []
     col_idx = []
     data = []
     index_map = {}
-    gamma_index_map = {}
-    gamma_col_counter = 0
+    gamma_index_map = {} 
+    gamma_col_counter = 0 # counts the number of unconstrained parameters (ie. length of gamma)
 
     for k in range(1, p + 1):
         for i in range(K):  # target node
             for j in range(K):  # source node
-                # Global α
+                #  α parameters
                 if i == j:
                     if global_alpha:
                         key = ('alpha', k)
@@ -101,7 +103,7 @@ def Rmatrix(adj_matrix, p, s_tuple, global_alpha=True, global_beta=True):
                             gamma_col_counter += 1
                         col = gamma_index_map[key]
 
-                    row = i * (K * p) + (k - 1) * K + j
+                    row = i + K * ((k - 1) * K + j)
                     row_idx.append(row)
                     col_idx.append(col)
                     data.append(1.0)
@@ -130,14 +132,15 @@ def Rmatrix(adj_matrix, p, s_tuple, global_alpha=True, global_beta=True):
                         gamma_col_counter += 1
                     col = gamma_index_map[key]
 
-                row = i * (K * p) + (k - 1) * K + j
+                row = i + K * ((k - 1) * K + j)
                 row_idx.append(row)
                 col_idx.append(col)
                 data.append(1.0)
                 index_map[(i, j, k)] = row
-
-    d = gamma_col_counter
-    R = sp.csr_matrix((data, (row_idx, col_idx)), shape=(total_rows, d))
+    
+    # The data just encodes the number of parameters in B
+    # Then, these are put into the larger R matrix in positions (row_idx, col_idx)
+    R = sp.csr_matrix((data, (row_idx, col_idx)), shape=(total_rows, gamma_col_counter))
     return R, index_map, gamma_index_map
 
 
@@ -151,10 +154,10 @@ A = np.array([
     [0, 1, 0]])
 p = 2
 s = [1, 2]
-R, vecB_map, gamma_map = Rmatrix(A, p, s, global_alpha=True, global_beta=True)
+R, vecB_map, gamma_map = Rmatrix(A, p, s, global_alpha=False, global_beta=True)
 print(R.shape)
-print(np.hstack([R[0:3,1].toarray(),R[3:6,1].toarray(),R[6:9,1].toarray()]))
 print(R)
+print(R.todense())
 print(vecB_map)
 print(gamma_map)
 
