@@ -1,6 +1,8 @@
 import numpy as np
 import networkx as nx
-from gnar.neighbours import get_neighbours
+import sys
+sys.path.append("/home/se24")  # Adjust the path to import from the parent directory
+from GNAR_python.gnar.neighbours import get_neighbours
 
 class GNARSim:
     """
